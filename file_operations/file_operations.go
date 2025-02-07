@@ -1,12 +1,12 @@
 package file_operations
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/jkingsman/ROMCopyEngine/logging"
@@ -197,7 +197,7 @@ func SearchAndReplace(path string, glob string, searchTerm string, replaceTerm s
 		if isRegex {
 			newContent = searchRegex.ReplaceAll(content, []byte(replaceTerm))
 		} else {
-			newContent = bytes.Replace(content, []byte(searchTerm), []byte(replaceTerm), -1)
+			newContent = []byte(strings.ReplaceAll(string(content), searchTerm, replaceTerm))
 		}
 
 		if err := os.WriteFile(file, newContent, 0644); err != nil {
