@@ -1,6 +1,6 @@
 module github.com/jkingsman/ROMCopyEngine
 
-go 1.23.5
+go 1.20
 
 require github.com/alecthomas/kong v1.7.0
 

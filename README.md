@@ -24,12 +24,20 @@ go install github.com/jkingsman/ROMCopyEngine@latest
 romcopyengine --help
 ```
 
+### from source
+
+```
+git clone https://github.com/jkingsman/ROMCopyEngine.git
+cd ROMCopyEngine
+go run romcopyengine.go
+```
+
 ## Example usages
 
 Copy PS1 games from your `psx` directory to the device's `PS1` directory, but exclude `.chd` files
 
 ```bash
-go run romcopyengine.go \
+./romcopyengine \
     --sourceDir /mnt/d/ROMs/ \
     --targetDir /mnt/i/ \
     --mapping psx:PS1 \
@@ -41,7 +49,7 @@ go run romcopyengine.go \
 Copy PS1 games, and for games in the folder called `multidisk`, move them to the same folder level as other games and update any `.m3u` files to reflect that.
 
 ```bash
-go run romcopyengine.go \
+romcopyengine \
     --sourceDir /mnt/d/ROMs/ \
     --targetDir /mnt/i/ \
     --mapping psx:PS1 \
@@ -65,7 +73,7 @@ An incredibly full featured invocation:
 
 
 ```bash
-go run romcopyengine.go \
+romcopyengine \
     --sourceDir /mnt/d/ROMs/ \
     --targetDir /mnt/i/ \
     --mapping psx:PS1 \
@@ -85,7 +93,7 @@ go run romcopyengine.go \
 
 ## Command line option overview
 
-*This is basically availble via go run romcopyengine.go --help.*
+*This is basically availble via romcopyengine --help.*
 
 
 ### Source, destination, and their relationship
