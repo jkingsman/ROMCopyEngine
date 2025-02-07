@@ -38,7 +38,7 @@ func summarizeWarnConfirm(config *cli_parsing.Config) {
 	}
 }
 
-func explodeDirs(config *cli_parsing.Config, destPath string) {
+func explodeDirs(config *cli_parsing.Config, destPath string) error {
 	logging.Log(logging.Action, "", "Exploding directories...")
 	for _, explodeDir := range config.ExplodeDirs {
 		if config.DryRun {
@@ -51,17 +51,17 @@ func explodeDirs(config *cli_parsing.Config, destPath string) {
 		}
 
 		if err != nil {
-			logging.LogWarning("Error exploding directory: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("error exploding directory: %w", err)
 		}
 
 		logging.Log(logging.Detail, logging.IconExplode, "Exploded %s into %s", explodeDir, destPath)
 	}
 
 	logging.LogComplete("Exploding")
+	return nil
 }
 
-func processRenames(config *cli_parsing.Config, destPath string) {
+func processRenames(config *cli_parsing.Config, destPath string) error {
 	logging.Log(logging.Action, "", "Processing renames...")
 	for _, r := range config.Renames {
 		if config.DryRun {
@@ -78,22 +78,21 @@ func processRenames(config *cli_parsing.Config, destPath string) {
 				logging.Log(logging.Detail, logging.IconSkip, "Unable to locate %s in %s; skipping", r.OldName, destPath)
 				continue
 			}
-			logging.LogWarning("Error renaming item: %s", err)
-			os.Exit(1)
+			return fmt.Errorf("error renaming item: %w", err)
 		}
 
 		if err := os.Rename(oldPath, newPath); err != nil {
-			logging.LogWarning("Error renaming item: %s", err)
-			os.Exit(1)
+			return fmt.Errorf("error renaming item: %w", err)
 		}
 
 		logging.Log(logging.Detail, logging.IconRename, "Renamed %s to %s", r.OldName, r.NewName)
 	}
 
 	logging.LogComplete("Renames")
+	return nil
 }
 
-func processRewrites(config *cli_parsing.Config, destPath string) {
+func processRewrites(config *cli_parsing.Config, destPath string) error {
 	logging.Log(logging.Action, "", "Processing rewrites...")
 	for _, r := range config.FileRewrites {
 		if config.DryRun {
@@ -113,11 +112,79 @@ func processRewrites(config *cli_parsing.Config, destPath string) {
 		}
 
 		if err != nil {
-			logging.LogWarning("Error rewriting %s to %s for glob %s...: %s", r.SearchPattern, r.ReplacePattern, r.FileGlob, err)
-			os.Exit(1)
+			return fmt.Errorf("error rewriting %s to %s for glob %s: %w", r.SearchPattern, r.ReplacePattern, r.FileGlob, err)
 		}
 	}
 	logging.LogComplete("Rewrites")
+	return nil
+}
+
+func processMapping(config *cli_parsing.Config, mapping cli_parsing.DirMapping) error {
+	sourcePath := filepath.Join(strings.TrimRight(config.SourceDir, "/\\"), strings.TrimLeft(mapping.Source, "/\\"))
+	destPath := filepath.Join(strings.TrimRight(config.TargetDir, "/\\"), strings.TrimLeft(mapping.Destination, "/\\"))
+
+	logging.Log(logging.Base, "", "Beginning operations for \033[1;34m%s -> %s\033[0m (%s -> %s)",
+		mapping.Source, mapping.Destination, sourcePath, destPath)
+
+	// Clean target directory if requested
+	if config.CleanTarget {
+		if err := cleanTargetDir(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	// Copy files
+	logging.Log(logging.Action, "", "Beginning copy...")
+	if err := copy_funcs.CopyFiles(sourcePath, destPath, config.CopyInclude, config.CopyExclude, config.DryRun); err != nil {
+		return fmt.Errorf("error copying files: %w", err)
+	}
+	logging.LogComplete("Copy")
+
+	// Post-copy operations
+	if err := runPostCopyOperations(config, destPath); err != nil {
+		return err
+	}
+
+	logging.Log(logging.Base, "", "Operations for %s -> %s complete!", mapping.Source, mapping.Destination)
+	return nil
+}
+
+func cleanTargetDir(config *cli_parsing.Config, destPath string) error {
+	if config.DryRun {
+		logging.LogDryRun(logging.Action, logging.IconClean, "Cleaning target directory...")
+		return nil
+	}
+
+	logging.Log(logging.Action, logging.IconClean, "Cleaning target directory...")
+	if err := file_operations.ClearDirectory(destPath); err != nil {
+		return fmt.Errorf("error cleaning target directory: %w", err)
+	}
+	return nil
+}
+
+func runPostCopyOperations(config *cli_parsing.Config, destPath string) error {
+	// Explode directories if configured
+	if len(config.ExplodeDirs) > 0 {
+		if err := explodeDirs(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	// Process renames if configured
+	if len(config.Renames) > 0 {
+		if err := processRenames(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	// Process rewrites if configured
+	if len(config.FileRewrites) > 0 {
+		if err := processRewrites(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
@@ -144,52 +211,10 @@ func main() {
 	summarizeWarnConfirm(config)
 
 	for _, mapping := range config.Mappings {
-		sourcePath := filepath.Join(strings.TrimRight(config.SourceDir, "/\\"), strings.TrimLeft(mapping.Source, "/\\"))
-		destPath := filepath.Join(strings.TrimRight(config.TargetDir, "/\\"), strings.TrimLeft(mapping.Destination, "/\\"))
-
-		logging.Log(logging.Base, "", "Beginning operations for \033[1;34m%s -> %s\033[0m (%s -> %s)", mapping.Source, mapping.Destination, filepath.Join(sourcePath, mapping.Source), filepath.Join(destPath, mapping.Destination))
-
-		if config.CleanTarget {
-			if config.DryRun {
-				logging.LogDryRun(logging.Action, "", "Cleaning target directory...")
-			} else {
-				logging.Log(logging.Action, "", "Cleaning target directory...")
-				err := file_operations.ClearDirectory(destPath)
-				if err != nil {
-					logging.LogError("Error cleaning target directory: %v", err)
-					os.Exit(1)
-				}
-			}
-		}
-
-		logging.Log(logging.Action, "", "Beginning copy...")
-		err := copy_funcs.CopyFiles(
-			sourcePath,
-			destPath,
-			config.CopyInclude,
-			config.CopyExclude,
-			config.DryRun,
-		)
-		logging.LogComplete("Copy")
-
-		if err != nil {
-			logging.LogError("Error copying files: %v", err)
+		if err := processMapping(config, mapping); err != nil {
+			logging.LogError("Error: %v", err)
 			os.Exit(1)
 		}
-
-		if len(config.ExplodeDirs) > 0 {
-			explodeDirs(config, destPath)
-		}
-
-		if len(config.Renames) > 0 {
-			processRenames(config, destPath)
-		}
-
-		if len(config.FileRewrites) > 0 {
-			processRewrites(config, destPath)
-		}
-
-		logging.Log(logging.Base, "", "Operations for %s -> %s complete!", mapping.Source, mapping.Destination)
 	}
 
 	logging.Log(logging.Base, "", "All transfers & processing completed successfully!")

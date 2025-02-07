@@ -1,13 +1,14 @@
 package file_operations
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/jkingsman/ROMCopyEngine/logging"
 )
 
@@ -90,6 +91,7 @@ func moveItem(sourcePath string, destPath string) error {
 	return nil
 }
 
+// File operations
 func CopyFile(srcPath string, destPath string) error {
 	source, err := os.Open(srcPath)
 	if err != nil {
@@ -115,35 +117,32 @@ func CopyFile(srcPath string, destPath string) error {
 	return os.Chmod(destPath, sourceInfo.Mode())
 }
 
-func copyDir(sourcePath, destPath string) error {
+func copyDir(sourcePath string, destPath string) error {
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get source directory info for %s: %w", sourcePath, err)
 	}
 
-	// make destPath dirs
 	if err := os.MkdirAll(destPath, sourceInfo.Mode()); err != nil {
-		return err
+		return fmt.Errorf("failed to create destination directory %s: %w", destPath, err)
 	}
 
-	// get stuff to be copied
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source directory %s: %w", sourcePath, err)
 	}
 
-	// loop copy
 	for _, entry := range entries {
-		sourceSub := filepath.Join(sourcePath, entry.Name())
-		destSub := filepath.Join(destPath, entry.Name())
+		srcPath := filepath.Join(sourcePath, entry.Name())
+		dstPath := filepath.Join(destPath, entry.Name())
 
 		if entry.IsDir() {
-			if err := copyDir(sourceSub, destSub); err != nil {
-				return err
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return fmt.Errorf("failed to copy directory from %s to %s: %w", srcPath, dstPath, err)
 			}
 		} else {
-			if err := CopyFile(sourceSub, destSub); err != nil {
-				return err
+			if err := CopyFile(srcPath, dstPath); err != nil {
+				return fmt.Errorf("failed to copy file from %s to %s: %w", srcPath, dstPath, err)
 			}
 		}
 	}
@@ -151,30 +150,16 @@ func copyDir(sourcePath, destPath string) error {
 	return nil
 }
 
+// Directory operations
 func ClearDirectory(dirPath string) error {
-	dir, err := os.Open(dirPath)
+	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return fmt.Errorf("failed to open directory: %w", err)
-	}
-	defer dir.Close()
-
-	// line em up....
-	entries, err := dir.Readdir(-1)
-	if err != nil {
-		return fmt.Errorf("failed to read directory contents: %w", err)
+		return fmt.Errorf("failed to read directory %s: %w", dirPath, err)
 	}
 
-	// ...and knock em down
 	for _, entry := range entries {
 		path := filepath.Join(dirPath, entry.Name())
-
-		if entry.IsDir() {
-			err = os.RemoveAll(path)
-		} else {
-			err = os.Remove(path)
-		}
-
-		if err != nil {
+		if err := os.RemoveAll(path); err != nil {
 			return fmt.Errorf("failed to remove %s: %w", path, err)
 		}
 	}
@@ -182,49 +167,42 @@ func ClearDirectory(dirPath string) error {
 	return nil
 }
 
+// Content operations
 func SearchAndReplace(path string, glob string, searchTerm string, replaceTerm string, isRegex bool) (bool, error) {
-	// get glob matches
-	matches, err := filepath.Glob(filepath.Join(path, glob))
+	pattern := filepath.Join(path, glob)
+	matches, err := doublestar.FilepathGlob(pattern)
 	if err != nil {
-		return false, fmt.Errorf("error finding files: %w", err)
+		return false, fmt.Errorf("failed to process glob pattern %s: %w", pattern, err)
 	}
 
 	if len(matches) == 0 {
-		return false, fmt.Errorf("no files found matching pattern %s in path %s", glob, path)
+		return false, nil
 	}
 
-	// loop over matches
+	var searchRegex *regexp.Regexp
+	if isRegex {
+		searchRegex, err = regexp.Compile(searchTerm)
+		if err != nil {
+			return true, fmt.Errorf("invalid regex pattern %s: %w", searchTerm, err)
+		}
+	}
+
 	for _, file := range matches {
 		content, err := os.ReadFile(file)
 		if err != nil {
-			return true, fmt.Errorf("error reading file %s: %w", file, err)
+			return true, fmt.Errorf("failed to read file %s: %w", file, err)
 		}
 
-		// run the replace
-		var newContent string
+		var newContent []byte
 		if isRegex {
-			regex, err := regexp.Compile(searchTerm)
-			if err != nil {
-				return true, fmt.Errorf("invalid regex pattern %s: %w", searchTerm, err)
-			}
-			newContent = regex.ReplaceAllString(string(content), replaceTerm)
+			newContent = searchRegex.ReplaceAll(content, []byte(replaceTerm))
 		} else {
-			newContent = strings.ReplaceAll(string(content), searchTerm, replaceTerm)
+			newContent = bytes.Replace(content, []byte(searchTerm), []byte(replaceTerm), -1)
 		}
 
-		// write content back to file
-		err = os.WriteFile(file, []byte(newContent), 0644)
-		if err != nil {
-			return true, fmt.Errorf("error writing to file %s: %w", file, err)
+		if err := os.WriteFile(file, newContent, 0644); err != nil {
+			return true, fmt.Errorf("failed to write to file %s: %w", file, err)
 		}
-
-		process_type := "literal"
-		if isRegex {
-			process_type = "regex"
-		}
-
-		logging.Log(logging.Detail, logging.IconReplace, "Replaced '%s' with '%s' for glob '%s' as %s replace in %s", searchTerm, replaceTerm, glob, process_type, file)
-
 	}
 
 	return true, nil

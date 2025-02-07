@@ -19,7 +19,7 @@ type CLI struct {
 	CopyInclude      []string `help:"copy only files and folders within each mapping which match the given glob (for example, '--copyInclude '*_favorite*'' would only copy files/folders from each source folder containing the string 'favorite'; '--copyInclude '*.xml' would only copy XML files found in each source folder. Remember to single quote your glob to prevent shell expansion. Multiples of this flag are allowed, and will be processed as an OR relation (files matching any --copyInclude will be included). This supports globstar (e.g. '--copyInclude **/*.png' copies PNGs from all child directories, whereas '--copyInclude *.png' only copies top-level PNGs in the platform root)." name:"copyInclude" type:"string"`
 	CopyExclude      []string `help:"copy only files and folders within each mapping which do NOT match the given glob (for example, '--copyExclude '*.xml'' would copy all files and folders except those ending in '.xml'. Remember to single quote your glob to prevent shell expansion. Multiples of this flag are allowed, and will be processed as an AND relation (files matching any --copyExclude will be excluded). '--copyExclude' entries are processed after '--copyExclude' entries" name:"copyExclude" type:"string"`
 	ExplodeDirs      []string `help:"provides a directory name contained in a ROM folder that should have its contents copied to the parent directory for that system, then delete the empty folder. For example, '--explodeDir images' would copy the contents of the image directory into its parent folder. Commonly used to bring boxart images out of an 'images' directory and onto the same level as ROMs. Multiples of this flag are allowed." name:"explodeDir" type:"string"`
-	FileRewrites     []string `help:"for a given file glob, execute a find and replace on all matching files in the format <glob>:<search term>:<replace term>. Useful for fixing paths in XML files. Remember to single quote your globs to prevent shell expansion and don't glob '*' unless you want to rewrite binary ROMs. For example, '--rewrite '*.xml':'../images':'./images' would replace all occurrences of the string '../images' to './images' in all XML files. Multiples of this flag are allowed." name:"rewrite" type:"string"`
+	FileRewrites     []string `help:"for a given file glob, execute a find and replace on all matching files in the format <glob>:<search term>:<replace term>. Useful for fixing paths in XML files. Remember to single quote your globs to prevent shell expansion and don't glob '*' unless you want to rewrite binary ROMs. For example, '--rewrite '*.xml:../images:./images'' would replace all occurrences of the string '../images' to './images' in all XML files. Multiples of this flag are allowed." name:"rewrite" type:"string"`
 	RewritesAreRegex bool     `help:"when set, the search term in any --rewrite flag is interpreted as a Golang regular expression" optional:"" name:"rewritesAreRegex"`
 	CleanTarget      bool     `help:"delete all files in the destination platform folder before copying ROMs in" optional:"" name:"cleanTarget"`
 	SkipConfirm      bool     `help:'skip all confirmations and execute the copy process' optional:"" name:"skipConfirm"`
@@ -57,6 +57,23 @@ type RewriteRule struct {
 	ReplacePattern string
 }
 
+func (c *Config) Validate() error {
+	if c.SourceDir == "" {
+		return fmt.Errorf("source directory is required")
+	}
+
+	if c.TargetDir == "" {
+		return fmt.Errorf("target directory is required")
+	}
+
+	// Validate mappings
+	if len(c.Mappings) == 0 {
+		return fmt.Errorf("at least one mapping is required")
+	}
+
+	return nil
+}
+
 func ParseAndValidate() (*Config, error) {
 	var cli CLI
 	ctx := kong.Parse(&cli,
@@ -66,48 +83,37 @@ func ParseAndValidate() (*Config, error) {
 	)
 
 	if err := ctx.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid command line arguments: %w", err)
 	}
 
 	config := &Config{
-		SourceDir:        cli.SourceDir,
-		TargetDir:        cli.TargetDir,
+		SourceDir:        filepath.Clean(cli.SourceDir),
+		TargetDir:        filepath.Clean(cli.TargetDir),
 		CopyInclude:      cli.CopyInclude,
 		CopyExclude:      cli.CopyExclude,
 		ExplodeDirs:      cli.ExplodeDirs,
-		CleanTarget:      cli.CleanTarget,
 		RewritesAreRegex: cli.RewritesAreRegex,
+		CleanTarget:      cli.CleanTarget,
 		SkipConfirm:      cli.SkipConfirm,
 		DryRun:           cli.DryRun,
 	}
 
-	// source + dest checks
+	// Validate source directory exists
 	if !isDirExists(config.SourceDir) {
 		return nil, fmt.Errorf("source directory does not exist: %s", config.SourceDir)
 	}
-	if !isDirExists(config.TargetDir) {
-		return nil, fmt.Errorf("target directory does not exist: %s", config.TargetDir)
-	}
 
-	// mapping checks
-	if len(cli.Mappings) == 0 {
-		return nil, fmt.Errorf("at least one mapping is required")
-	}
-
+	// Parse mappings
+	config.Mappings = make([]DirMapping, 0, len(cli.Mappings))
 	for _, mapping := range cli.Mappings {
 		parts := strings.Split(mapping, ":")
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid mapping format: %s", mapping)
+			return nil, fmt.Errorf("invalid mapping format '%s': must be in format 'source:destination'", mapping)
 		}
 
 		sourcePath := filepath.Join(config.SourceDir, parts[0])
-		targetPath := filepath.Join(config.TargetDir, parts[1])
-
 		if !isDirExists(sourcePath) {
 			return nil, fmt.Errorf("source mapping directory does not exist: %s", sourcePath)
-		}
-		if !isDirExists(targetPath) {
-			return nil, fmt.Errorf("target mapping directory does not exist: %s", targetPath)
 		}
 
 		config.Mappings = append(config.Mappings, DirMapping{
@@ -116,33 +122,32 @@ func ParseAndValidate() (*Config, error) {
 		})
 	}
 
-	// rename checks
+	// Parse renames
+	config.Renames = make([]NameMapping, 0, len(cli.Renames))
 	for _, rename := range cli.Renames {
 		parts := strings.Split(rename, ":")
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid rename format: %s", rename)
+			return nil, fmt.Errorf("invalid rename format '%s': must be in format 'old:new'", rename)
 		}
+
 		config.Renames = append(config.Renames, NameMapping{
 			OldName: parts[0],
 			NewName: parts[1],
 		})
 	}
 
-	// validate optionally regex checks
-	if len(cli.FileRewrites) == 0 && config.RewritesAreRegex {
-		return nil, fmt.Errorf("--rewritesAreRegex requires at least one rewrite rule")
-	}
-
+	// Parse file rewrites
+	config.FileRewrites = make([]RewriteRule, 0, len(cli.FileRewrites))
 	for _, rewrite := range cli.FileRewrites {
 		parts := strings.Split(rewrite, ":")
 		if len(parts) != 3 {
-			return nil, fmt.Errorf("invalid simple rewrite format: %s", rewrite)
+			return nil, fmt.Errorf("invalid rewrite format '%s': must be in format 'glob:search:replace'", rewrite)
 		}
 
-		// validate regex pattern
-		if config.RewritesAreRegex {
+		// If using regex, validate the pattern
+		if cli.RewritesAreRegex {
 			if _, err := regexp.Compile(parts[1]); err != nil {
-				return nil, fmt.Errorf("invalid regex pattern in rewrite: %s", err)
+				return nil, fmt.Errorf("invalid regex pattern '%s': %w", parts[1], err)
 			}
 		}
 
@@ -151,6 +156,10 @@ func ParseAndValidate() (*Config, error) {
 			SearchPattern:  parts[1],
 			ReplacePattern: parts[2],
 		})
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
 
 	return config, nil
