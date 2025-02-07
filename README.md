@@ -155,6 +155,6 @@ The tests here are absolute GARBAGE. Terrible composition, and I didn't write mo
 
 Please format your code and ensure tests pass.
 
-Before PRing, run `gofmt -w **/*.go` and `go test ./...`.
+Before PRing, run `gofmt -w **/*.go` and `go test -v ./...`.
 
 I will release builds (please don't PR artifacts), but you can test your artifacts by running `./build.sh` without a suffix (otherwise it tries to push that tag).

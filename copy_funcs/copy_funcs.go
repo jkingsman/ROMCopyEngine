@@ -8,6 +8,7 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 
 	"github.com/jkingsman/ROMCopyEngine/file_operations"
+	"github.com/jkingsman/ROMCopyEngine/logging"
 )
 
 func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExclude []string, dryRun bool) error {
@@ -36,14 +37,12 @@ func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExc
 		}
 
 		destFile := filepath.Join(absDest, relPath)
-		prefix := ""
-		if dryRun {
-			prefix = "[DRY RUN] "
-		}
 
 		if info.IsDir() {
-			if !dryRun {
-				fmt.Printf("    📁 %sCreating dir: %s\n", prefix, destFile)
+			if dryRun {
+				logging.LogDryRun(logging.Detail, logging.IconFolder, "Creating dir: %s", destFile)
+			} else {
+				logging.Log(logging.Detail, logging.IconFolder, "Creating dir: %s", destFile)
 				if err := os.MkdirAll(destFile, info.Mode()); err != nil {
 					return fmt.Errorf("failed to create directory %s: %w", destFile, err)
 				}
@@ -52,12 +51,18 @@ func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExc
 		}
 
 		if !shouldInclude(relPath, copyInclude, copyExclude) {
-			fmt.Printf("    ⏭️ Skipping file: %s\n", relPath)
+			logging.Log(logging.Detail, logging.IconSkip, "Skipping file: %s", relPath)
 			return nil
 		}
 
-		fmt.Printf("    📋 %sCopying file: %s -> %s\n", prefix, filepath.Join(filepath.Base(absSource), relPath), filepath.Join(filepath.Base((absDest)), relPath))
-		if !dryRun {
+		if dryRun {
+			logging.LogDryRun(logging.Detail, logging.IconCopy, "Copying file: %s -> %s",
+				filepath.Join(filepath.Base(absSource), relPath),
+				filepath.Join(filepath.Base(absDest), relPath))
+		} else {
+			logging.Log(logging.Detail, logging.IconCopy, "Copying file: %s -> %s",
+				filepath.Join(filepath.Base(absSource), relPath),
+				filepath.Join(filepath.Base(absDest), relPath))
 			if err := os.MkdirAll(filepath.Dir(destFile), 0755); err != nil {
 				return fmt.Errorf("failed to create directories for %s: %w", destFile, err)
 			}

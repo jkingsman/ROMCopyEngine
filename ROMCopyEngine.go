@@ -9,6 +9,7 @@ import (
 	"github.com/jkingsman/ROMCopyEngine/cli_parsing"
 	"github.com/jkingsman/ROMCopyEngine/copy_funcs"
 	"github.com/jkingsman/ROMCopyEngine/file_operations"
+	"github.com/jkingsman/ROMCopyEngine/logging"
 )
 
 func summarizeWarnConfirm(config *cli_parsing.Config) {
@@ -17,113 +18,173 @@ func summarizeWarnConfirm(config *cli_parsing.Config) {
 
 	if !config.SkipConfirm && !config.DryRun {
 		if config.CleanTarget {
-			fmt.Println("⚠️ WARNING ⚠️")
-			fmt.Println("You have chosen to run with the '--cleanTarget' option enabled. This will delete all contents from the following directories before copying:")
+			logging.LogWarning("You have chosen to run with the '--cleanTarget' option enabled. This will delete all contents from the following directories before copying:")
 			for _, mapping := range config.Mappings {
-				fmt.Println(" •", filepath.Join(strings.TrimRight(config.TargetDir, "/\\"), strings.TrimLeft(mapping.Destination, "/\\")))
+				logging.Log(logging.Action, "", "• %s", filepath.Join(strings.TrimRight(config.TargetDir, "/\\"), strings.TrimLeft(mapping.Destination, "/\\")))
 			}
 			fmt.Println()
 		}
 
 		fmt.Println("[Hint: you can rerun this with '--dryRun' to see all operations that would be performed without performing them, or use '--skipConfirm' to skip this confirmation]")
 		if cli_parsing.GetConfirmation("Are you sure you want to proceed?") {
-			fmt.Println("Beginning copy...")
+			logging.Log(logging.Base, "", "Beginning copy...")
 		} else {
-			fmt.Println("Copy cancelled. No operations performed.")
+			logging.Log(logging.Base, "", "Copy cancelled. No operations performed.")
 			os.Exit(1)
 		}
 	} else {
-		fmt.Println("-y passed; skipping confirmation... Let's rock!")
+		logging.Log(logging.Base, "", "-y passed; skipping confirmation... Let's rock!")
 		fmt.Println()
 	}
 }
 
-func explodeDirs(config *cli_parsing.Config, destPath string) {
-	fmt.Println("  Exploding directories...")
+func explodeDirs(config *cli_parsing.Config, destPath string) error {
+	logging.Log(logging.Action, "", "Exploding directories...")
 	for _, explodeDir := range config.ExplodeDirs {
 		if config.DryRun {
-			fmt.Printf("   💥 [DRY RUN] If located, would have exploded %s into %s\n", explodeDir, destPath)
+			logging.LogDryRun(logging.Detail, logging.IconExplode, "If located, would have exploded %s into %s", explodeDir, destPath)
 			continue
 		}
 		found, err := file_operations.ExplodeFolder(destPath, explodeDir)
 		if !found {
-			fmt.Printf("    ⏭️ Unable to locate %s folder to explode; skipping\n", explodeDir)
 			continue
 		}
 
 		if err != nil {
-			fmt.Printf("    Error exploding directory: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error exploding directory: %w", err)
 		}
 
-		fmt.Printf("    💥 Exploded %s into %s\n", explodeDir, destPath)
+		logging.Log(logging.Detail, logging.IconExplode, "Exploded %s into %s", explodeDir, destPath)
 	}
 
-	fmt.Println("  Exploding complete!")
+	logging.LogComplete("Exploding")
+	return nil
 }
 
-func processRenames(config *cli_parsing.Config, destPath string) {
-	fmt.Println("  Processing renames...")
+func processRenames(config *cli_parsing.Config, destPath string) error {
+	logging.Log(logging.Action, "", "Processing renames...")
 	for _, r := range config.Renames {
 		if config.DryRun {
-			fmt.Printf("   🏷️ [DRY RUN] If located in %s, would have renamed %s to %s\n", destPath, r.OldName, r.NewName)
+			logging.LogDryRun(logging.Detail, logging.IconRename, "If located in %s, would have renamed %s to %s", destPath, r.OldName, r.NewName)
 			continue
 		}
 
-		// Construct full paths
 		oldPath := filepath.Join(destPath, r.OldName)
 		newPath := filepath.Join(destPath, r.NewName)
 
-		// Check if old file/folder exists
 		_, err := os.Stat(oldPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				fmt.Printf("    ⏭️ Unable to locate %s in %s; skipping\n", r.OldName, destPath)
+				logging.Log(logging.Detail, logging.IconSkip, "Unable to locate %s in %s; skipping", r.OldName, destPath)
 				continue
 			}
-			fmt.Printf("    Error renaming item: %s\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error renaming item: %w", err)
 		}
 
-		// Attempt to rename
-		err = os.Rename(oldPath, newPath)
-		if err != nil {
-			fmt.Printf("    Error renaming item: %s\n", err)
-			os.Exit(1)
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return fmt.Errorf("error renaming item: %w", err)
 		}
 
-		fmt.Printf("    🏷️ Renamed %s to %s\n", r.OldName, r.NewName)
-
+		logging.Log(logging.Detail, logging.IconRename, "Renamed %s to %s", r.OldName, r.NewName)
 	}
 
-	fmt.Println("  Renames complete!")
+	logging.LogComplete("Renames")
+	return nil
 }
 
-func processRewrites(config *cli_parsing.Config, destPath string) {
-	fmt.Println("  Processing rewrites...")
+func processRewrites(config *cli_parsing.Config, destPath string) error {
+	logging.Log(logging.Action, "", "Processing rewrites...")
 	for _, r := range config.FileRewrites {
 		if config.DryRun {
 			rewriteType := "literal"
 			if config.RewritesAreRegex {
 				rewriteType = "regex"
 			}
-			fmt.Printf("   🔀 [DRY RUN] If files found matching glob '%s' located in %s, would have rewritten %s to %s via %s search\n", r.FileGlob, destPath, r.SearchPattern, r.ReplacePattern, rewriteType)
+			logging.LogDryRun(logging.Detail, logging.IconRewrite, "If files found matching glob '%s' located in %s, would have rewritten %s to %s via %s search", r.FileGlob, destPath, r.SearchPattern, r.ReplacePattern, rewriteType)
 			continue
 		}
 
 		found, err := file_operations.SearchAndReplace(destPath, r.FileGlob, r.SearchPattern, r.ReplacePattern, config.RewritesAreRegex)
 
 		if !found {
-			fmt.Printf("   ⏭️ No files matching glob '%s' in %s for rewrite of %s to %s; skipping...\n", r.FileGlob, destPath, r.SearchPattern, r.ReplacePattern)
+			logging.Log(logging.Detail, logging.IconSkip, "No files matching glob '%s' in %s for rewrite of %s to %s; skipping...", r.FileGlob, destPath, r.SearchPattern, r.ReplacePattern)
 			continue
 		}
 
 		if err != nil {
-			fmt.Printf("   Error rewriting %s to %s for glob %s...: %s", r.SearchPattern, r.ReplacePattern, r.FileGlob, err)
-			os.Exit(1)
+			return fmt.Errorf("error rewriting %s to %s for glob %s: %w", r.SearchPattern, r.ReplacePattern, r.FileGlob, err)
 		}
 	}
-	fmt.Println("  Rewrites complete!")
+	logging.LogComplete("Rewrites")
+	return nil
+}
+
+func processMapping(config *cli_parsing.Config, mapping cli_parsing.DirMapping) error {
+	sourcePath := filepath.Join(strings.TrimRight(config.SourceDir, "/\\"), strings.TrimLeft(mapping.Source, "/\\"))
+	destPath := filepath.Join(strings.TrimRight(config.TargetDir, "/\\"), strings.TrimLeft(mapping.Destination, "/\\"))
+
+	logging.Log(logging.Base, "", "Beginning operations for \033[1;34m%s -> %s\033[0m (%s -> %s)",
+		mapping.Source, mapping.Destination, sourcePath, destPath)
+
+	// Clean target directory if requested
+	if config.CleanTarget {
+		if err := cleanTargetDir(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	// Copy files
+	logging.Log(logging.Action, "", "Beginning copy...")
+	if err := copy_funcs.CopyFiles(sourcePath, destPath, config.CopyInclude, config.CopyExclude, config.DryRun); err != nil {
+		return fmt.Errorf("error copying files: %w", err)
+	}
+	logging.LogComplete("Copy")
+
+	// Post-copy operations
+	if err := runPostCopyOperations(config, destPath); err != nil {
+		return err
+	}
+
+	logging.Log(logging.Base, "", "Operations for %s -> %s complete!", mapping.Source, mapping.Destination)
+	return nil
+}
+
+func cleanTargetDir(config *cli_parsing.Config, destPath string) error {
+	if config.DryRun {
+		logging.LogDryRun(logging.Action, logging.IconClean, "Cleaning target directory...")
+		return nil
+	}
+
+	logging.Log(logging.Action, logging.IconClean, "Cleaning target directory...")
+	if err := file_operations.ClearDirectory(destPath); err != nil {
+		return fmt.Errorf("error cleaning target directory: %w", err)
+	}
+	return nil
+}
+
+func runPostCopyOperations(config *cli_parsing.Config, destPath string) error {
+	// Explode directories if configured
+	if len(config.ExplodeDirs) > 0 {
+		if err := explodeDirs(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	// Process renames if configured
+	if len(config.Renames) > 0 {
+		if err := processRenames(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	// Process rewrites if configured
+	if len(config.FileRewrites) > 0 {
+		if err := processRewrites(config, destPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
@@ -143,66 +204,18 @@ func main() {
 
 	config, err := cli_parsing.ParseAndValidate()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		logging.LogError("Error: %v", err)
 		os.Exit(1)
 	}
 
 	summarizeWarnConfirm(config)
 
 	for _, mapping := range config.Mappings {
-		// bake full path and normalize slashes
-		sourcePath := filepath.Join(strings.TrimRight(config.SourceDir, "/\\"), strings.TrimLeft(mapping.Source, "/\\"))
-		destPath := filepath.Join(strings.TrimRight(config.TargetDir, "/\\"), strings.TrimLeft(mapping.Destination, "/\\"))
-
-		fmt.Printf("Beginning operations for \033[1;34m%s -> %s\033[0m (%s -> %s)\n", mapping.Source, mapping.Destination, filepath.Join(sourcePath, mapping.Source), filepath.Join(destPath, mapping.Destination))
-
-		// clean if desired
-		if config.CleanTarget {
-			if config.DryRun {
-				fmt.Println(" 🧹 [DRY RUN] Cleaning target directory...")
-			} else {
-				fmt.Println("  🧹 Cleaning target directory...")
-				err := file_operations.ClearDirectory(destPath)
-				if err != nil {
-					fmt.Printf("  Error cleaning target directory: %v\n", err)
-					os.Exit(1)
-				}
-			}
-		}
-
-		// copy files
-		fmt.Println("  Beginning copy...")
-		err := copy_funcs.CopyFiles(
-			sourcePath,
-			destPath,
-			config.CopyInclude,
-			config.CopyExclude,
-			config.DryRun,
-		)
-		fmt.Println("  Copy complete!")
-
-		if err != nil {
-			fmt.Printf("  Error copying files: %v\n", err)
+		if err := processMapping(config, mapping); err != nil {
+			logging.LogError("Error: %v", err)
 			os.Exit(1)
 		}
-
-		// explode dirs
-		if len(config.ExplodeDirs) > 0 {
-			explodeDirs(config, destPath)
-		}
-
-		// process renames
-		if len(config.Renames) > 0 {
-			processRenames(config, destPath)
-		}
-
-		// process rewrites
-		if len(config.FileRewrites) > 0 {
-			processRewrites(config, destPath)
-		}
-
-		fmt.Printf("Operations for %s -> %s complete!\n", mapping.Source, mapping.Destination)
 	}
 
-	fmt.Println("All transfers & processing completed successfully!")
+	logging.Log(logging.Base, "", "All transfers & processing completed successfully!")
 }

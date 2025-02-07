@@ -85,6 +85,30 @@ func TestParseAndValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "valid rewrite",
+			args: []string{
+				"--sourceDir", tmpSource,
+				"--targetDir", tmpTarget,
+				"--mapping", "nes:NES",
+				"--rewrite", "*.xml:../images:./images",
+			},
+			wantError: false,
+			validate: func(t *testing.T, c *Config) {
+				if len(c.FileRewrites) != 1 {
+					t.Errorf("Expected 1 rewrite, got %d", len(c.FileRewrites))
+				}
+				if c.FileRewrites[0].FileGlob != "*.xml" {
+					t.Errorf("Expected file glob '*.xml', got %q", c.FileRewrites[0].FileGlob)
+				}
+				if c.FileRewrites[0].SearchPattern != "../images" {
+					t.Errorf("Expected search pattern '../images', got %q", c.FileRewrites[0].SearchPattern)
+				}
+				if c.FileRewrites[0].ReplacePattern != "./images" {
+					t.Errorf("Expected replace pattern './images', got %q", c.FileRewrites[0].ReplacePattern)
+				}
+			},
+		},
+		{
 			name: "valid rewrite with regex",
 			args: []string{
 				"--sourceDir", tmpSource,
@@ -95,13 +119,23 @@ func TestParseAndValidate(t *testing.T) {
 			},
 			wantError: false,
 			validate: func(t *testing.T, c *Config) {
-				if !c.RewritesAreRegex {
-					t.Error("RewritesAreRegex should be true")
-				}
 				if len(c.FileRewrites) != 1 {
 					t.Errorf("Expected 1 rewrite, got %d", len(c.FileRewrites))
 				}
+				if !c.RewritesAreRegex {
+					t.Error("Expected RewritesAreRegex to be true")
+				}
 			},
+		},
+		{
+			name: "invalid rewrite format",
+			args: []string{
+				"--sourceDir", tmpSource,
+				"--targetDir", tmpTarget,
+				"--mapping", "nes:NES",
+				"--rewrite", "*.xml:foo",  // Missing replace pattern
+			},
+			wantError: true,
 		},
 		{
 			name: "invalid regex pattern",
@@ -110,6 +144,17 @@ func TestParseAndValidate(t *testing.T) {
 				"--targetDir", tmpTarget,
 				"--mapping", "nes:NES",
 				"--rewrite", "*.xml:[invalid:replace",
+				"--rewritesAreRegex",
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid rewrite format",
+			args: []string{
+				"--sourceDir", tmpSource,
+				"--targetDir", tmpTarget,
+				"--mapping", "nes:NES",
+				"--rewrite", "*.xml:foo:bar:baz",  // Invalid format with too many colons
 				"--rewritesAreRegex",
 			},
 			wantError: true,
