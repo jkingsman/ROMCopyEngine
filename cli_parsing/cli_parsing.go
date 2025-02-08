@@ -22,8 +22,9 @@ type CLI struct {
 	FileRewrites     []string `help:"for a given file glob, execute a find and replace on all matching files in the format <glob>:<search term>:<replace term>. Useful for fixing paths in XML files. Remember to single quote your globs to prevent shell expansion and don't glob '*' unless you want to rewrite binary ROMs. For example, '--rewrite '*.xml:../images:./images'' would replace all occurrences of the string '../images' to './images' in all XML files. Multiples of this flag are allowed." name:"rewrite" type:"string"`
 	RewritesAreRegex bool     `help:"when set, the search term in any --rewrite flag is interpreted as a Golang regular expression" optional:"" name:"rewritesAreRegex"`
 	CleanTarget      bool     `help:"delete all files in the destination platform folder before copying ROMs in" optional:"" name:"cleanTarget"`
-	SkipConfirm      bool     `help:'skip all confirmations and execute the copy process' optional:"" name:"skipConfirm"`
+	SkipConfirm      bool     `help:"skip all confirmations and execute the copy process" optional:"" name:"skipConfirm"`
 	DryRun           bool     `help:"don't execute any file copies or operations; just print what would be done" optional:"" name:"dryRun"`
+	LoopbackCopy     bool     `help:"[EXPERIMENTAL/UNSAFE] when set, any files matched by --copyInclude will have the path and extension stripped, be globbified into '**/*<filename>*', and then serve as the --copyInclude for a repeated invocation. Intended to simplify copying off a device to set a --copyInclude for '**/*.sav' or similar, then also copy the ROMs correlated with those saves. Untested; use at your own risk." optional:"" name:"loopbackCopy"`
 }
 
 type Config struct {
@@ -39,6 +40,7 @@ type Config struct {
 	CleanTarget      bool
 	SkipConfirm      bool
 	DryRun           bool
+	LoopbackCopy     bool
 }
 
 type DirMapping struct {
@@ -96,6 +98,7 @@ func ParseAndValidate() (*Config, error) {
 		CleanTarget:      cli.CleanTarget,
 		SkipConfirm:      cli.SkipConfirm,
 		DryRun:           cli.DryRun,
+		LoopbackCopy:     cli.LoopbackCopy,
 	}
 
 	// Validate source directory exists
@@ -229,6 +232,10 @@ func PrintCLIOpts(config *Config) {
 
 	if config.SkipConfirm {
 		fmt.Println("Skip-confirm enabled; no warnings given before proceeding")
+	}
+
+	if config.LoopbackCopy {
+		fmt.Println("Loopback mode enabled; copy will be run a second time, globbing to match filename of previously matched files")
 	}
 
 	fmt.Println()

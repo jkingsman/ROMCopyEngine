@@ -70,15 +70,18 @@ func shouldIncludeDir(dirPath string, absSource string, includes []string, exclu
 	return (isEmpty && dirShouldBeIncluded) || hasMatchingFiles, nil
 }
 
-func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExclude []string, dryRun bool) error {
+func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExclude []string, dryRun bool) ([]string, error) {
+	// Track copied files
+	copiedFiles := make([]string, 0)
+
 	absSource, err := filepath.Abs(sourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute source path: %w", err)
+		return nil, fmt.Errorf("failed to get absolute source path: %w", err)
 	}
 
 	absDest, err := filepath.Abs(destPath)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute destination path: %w", err)
+		return nil, fmt.Errorf("failed to get absolute destination path: %w", err)
 	}
 
 	// First pass: collect all directories that should be created
@@ -113,11 +116,11 @@ func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExc
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Second pass: copy files and create necessary directories
-	return filepath.Walk(absSource, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(absSource, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("error accessing path %s: %w", path, err)
 		}
@@ -156,6 +159,7 @@ func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExc
 			logging.LogDryRun(logging.Detail, logging.IconCopy, "Copying file: %s -> %s",
 				filepath.Join(filepath.Base(absSource), relPath),
 				filepath.Join(filepath.Base(absDest), relPath))
+			copiedFiles = append(copiedFiles, destFile)
 		} else {
 			logging.Log(logging.Detail, logging.IconCopy, "Copying file: %s -> %s",
 				filepath.Join(filepath.Base(absSource), relPath),
@@ -168,11 +172,34 @@ func CopyFiles(sourcePath string, destPath string, copyInclude []string, copyExc
 					return fmt.Errorf("failed to create directories for %s: %w", destFile, err)
 				}
 			}
-			return file_operations.CopyFile(path, destFile)
+			if err := file_operations.CopyFile(path, destFile); err != nil {
+				return err
+			}
+			copiedFiles = append(copiedFiles, destFile)
 		}
 
 		return nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return copiedFiles, nil
+}
+
+func GlobifyFilenameOfPathList(paths []string) []string {
+	for i, path := range paths {
+
+		filename := filepath.Base(path)
+
+		extension := filepath.Ext(filename)
+		nameWithoutExt := filename[:len(filename)-len(extension)]
+
+		paths[i] = "**/*" + nameWithoutExt + "*"
+	}
+
+	return paths
 }
 
 func shouldInclude(path string, includes []string, excludes []string) bool {

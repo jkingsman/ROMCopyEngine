@@ -135,10 +135,23 @@ func processMapping(config *cli_parsing.Config, mapping cli_parsing.DirMapping) 
 
 	// Copy files
 	logging.Log(logging.Action, "", "Beginning copy...")
-	if err := copy_funcs.CopyFiles(sourcePath, destPath, config.CopyInclude, config.CopyExclude, config.DryRun); err != nil {
+	filesCopied, err := copy_funcs.CopyFiles(sourcePath, destPath, config.CopyInclude, config.CopyExclude, config.DryRun)
+	if err != nil {
 		return fmt.Errorf("error copying files: %w", err)
 	}
 	logging.LogComplete("Copy")
+
+	logging.Log(logging.Action, "", "Beginning re-glob-and-copy-matches [ignoring excludes!!!]...")
+	if config.LoopbackCopy && len(filesCopied) > 0 {
+		globifiedFileList := copy_funcs.GlobifyFilenameOfPathList(filesCopied)
+
+		logging.Log(logging.Detail, logging.IconCopy, "Beginning loopback from %d glob(s): [%s]", len(filesCopied), strings.Join(globifiedFileList, ", "))
+		_, err := copy_funcs.CopyFiles(sourcePath, destPath, globifiedFileList, nil, config.DryRun)
+		if err != nil {
+			return fmt.Errorf("error copying files: %w", err)
+		}
+	}
+	logging.LogComplete("Re-glob-and-copy-matches")
 
 	// Post-copy operations
 	if err := runPostCopyOperations(config, destPath); err != nil {

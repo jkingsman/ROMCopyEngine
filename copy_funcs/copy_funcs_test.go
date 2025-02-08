@@ -374,7 +374,7 @@ func TestCopyFiles(t *testing.T) {
 			os.RemoveAll(destDir)
 			os.MkdirAll(destDir, 0755)
 
-			err := CopyFiles(sourceDir, destDir, tt.includes, tt.excludes, tt.dryRun)
+			_, err := CopyFiles(sourceDir, destDir, tt.includes, tt.excludes, tt.dryRun)
 			if err != nil {
 				t.Errorf("CopyFiles() error = %v", err)
 				return
