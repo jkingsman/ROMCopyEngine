@@ -18,6 +18,15 @@ class FileStructure:
     is_dir: bool = False
 
 
+@dataclass
+class TestFixture:
+    """Test fixture for ROMCopyEngine tests containing source, destination and expected structures."""
+    source_struct: List[Dict[str, Any]]
+    dest_struct: List[Dict[str, Any]]
+    expected_struct: List[Dict[str, Any]]
+    options: str = ""
+
+
 class ROMCopyEngineTest(unittest.TestCase):
     def setUp(self):
         """Create temporary directories for each test."""
@@ -45,15 +54,18 @@ class ROMCopyEngineTest(unittest.TestCase):
             base_path: The root directory to create the structure in
             structure: List of dictionaries specifying files and folders to create
         """
+        # First create all directories to ensure parent directories exist
         for item in structure:
             full_path = os.path.join(base_path, item["path"])
-
-            # Create parent directories if they don't exist
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
             if item.get("is_dir", False):
                 os.makedirs(full_path, exist_ok=True)
             else:
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+        # Then create all files
+        for item in structure:
+            full_path = os.path.join(base_path, item["path"])
+            if not item.get("is_dir", False):
                 with open(full_path, "w") as f:
                     f.write(item.get("contents", ""))
 
@@ -70,12 +82,11 @@ class ROMCopyEngineTest(unittest.TestCase):
         result = []
 
         for root, dirs, files in os.walk(directory):
-            # Add empty directories
+            # Add all directories (empty or not)
             for d in dirs:
                 full_path = os.path.join(root, d)
-                if not os.listdir(full_path):  # Only add if empty
-                    rel_path = os.path.relpath(full_path, directory)
-                    result.append({"path": rel_path, "is_dir": True})
+                rel_path = os.path.relpath(full_path, directory)
+                result.append({"path": rel_path, "is_dir": True})
 
             # Add files
             for f in files:
@@ -159,8 +170,9 @@ class ROMCopyEngineTest(unittest.TestCase):
             command.extend(options.split())
 
         job = subprocess.run(
-            command,
+            ' '.join(command),
             capture_output=True,
+            shell=True,
             text=True,
             cwd=os.path.dirname(os.path.abspath(__file__)),
         )
@@ -172,28 +184,19 @@ class ROMCopyEngineTest(unittest.TestCase):
         # time.sleep(9999999)
         return job
 
-    def run_copy_test(
-        self,
-        source_struct: List[Dict[str, Any]],
-        dest_struct: List[Dict[str, Any]],
-        expected_struct: List[Dict[str, Any]],
-        options: str = "",
-    ) -> None:
-        """Run a copy test with given file structures and validate the results.
+    def run_copy_test(self, fixture: TestFixture) -> None:
+        """Run a copy test with given test fixture.
 
         Args:
-            source_struct: Source directory structure
-            dest_struct: Destination directory structure
-            expected_struct: Expected destination structure after copy
-            options: Additional command line options as a string
+            fixture: TestFixture containing source, destination, expected structures and options
         """
         # Create initial file structures
-        self.create_files_folders(self.source_temp_folder, source_struct)
-        self.create_files_folders(self.destination_temp_folder, dest_struct)
+        self.create_files_folders(self.source_temp_folder, fixture.source_struct)
+        self.create_files_folders(self.destination_temp_folder, fixture.dest_struct)
 
         # Run the copy engine
         result = self.execute_rom_copy_engine(
-            self.source_temp_folder, self.destination_temp_folder, options
+            self.source_temp_folder, self.destination_temp_folder, fixture.options
         )
         self.assertEqual(
             result.returncode,
@@ -206,7 +209,7 @@ class ROMCopyEngineTest(unittest.TestCase):
             self.destination_temp_folder
         )
         self.assertStructuresEqual(
-            expected_struct, actual_destination_file_folder_struct
+            fixture.expected_struct, actual_destination_file_folder_struct
         )
 
     # Common test structures
@@ -239,31 +242,26 @@ class ROMCopyEngineTest(unittest.TestCase):
 
     def test_basic_copy(self):
         """Test a basic copy operation with the example from the documentation."""
-        source_file_folder_struct = [
-            {"path": "snes/file1.snes"},
-            {"path": "snes/file2.snes"},
-            {"path": "snes/nested_dir/image.png"},
-            {"path": "snes/file.xml", "contents": "<xml>foo</xml>"},
-            {"path": "nes", "is_dir": True},
-        ]
-
-        destination_file_folder_struct = [
-            {"path": "snes", "is_dir": True},
-        ]
-
-        expected_destination_file_folder_struct = [
-            {"path": "snes/file1.snes"},
-            {"path": "snes/file2.snes"},
-            {"path": "snes/nested_dir/image.png"},
-            {"path": "snes/file.xml", "contents": "<xml>foo</xml>"},
-        ]
-
-        self.run_copy_test(
-            source_file_folder_struct,
-            destination_file_folder_struct,
-            expected_destination_file_folder_struct,
-            "--mapping snes:snes --skipConfirm",
+        fixture = TestFixture(
+            source_struct=[
+                {"path": "snes/file1.snes"},
+                {"path": "snes/file2.snes"},
+                {"path": "snes/nested_dir/image.png"},
+                {"path": "snes/file.xml", "contents": "<xml>foo</xml>"},
+                {"path": "nes", "is_dir": True},
+            ],
+            dest_struct=[{"path": "snes", "is_dir": True}],
+            expected_struct=[
+                {"path": "snes", "is_dir": True},
+                {"path": "snes/file1.snes"},
+                {"path": "snes/file2.snes"},
+                {"path": "snes/file.xml", "contents": "<xml>foo</xml>"},
+                {"path": "snes/nested_dir", "is_dir": True},
+                {"path": "snes/nested_dir/image.png"},
+            ],
+            options="--mapping snes:snes --skipConfirm"
         )
+        self.run_copy_test(fixture)
 
     def test_basic_copy_with_stray_injected_file(self):
         """Test that stray files in the destination are preserved."""
@@ -281,48 +279,59 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         expected_destination_file_folder_struct = [
+            {"path": "snes", "is_dir": True},
             {"path": "snes/file1.snes"},
             {"path": "snes/file2.snes"},
-            {"path": "snes/nested_dir/image.png"},
             {"path": "snes/file.xml", "contents": "<xml>foo</xml>"},
+            {"path": "snes/nested_dir", "is_dir": True},
+            {"path": "snes/nested_dir/image.png"},
             {"path": "snes/not_belong.snes"},
         ]
 
         self.run_copy_test(
-            source_file_folder_struct,
-            destination_file_folder_struct,
-            expected_destination_file_folder_struct,
-            "--mapping snes:snes --skipConfirm",
+            TestFixture(
+                source_struct=source_file_folder_struct,
+                dest_struct=destination_file_folder_struct,
+                expected_struct=expected_destination_file_folder_struct,
+                options="--mapping snes:snes --skipConfirm",
+            )
         )
 
     def test_multiple_mappings(self):
         """Test that multiple platform mappings work correctly."""
         expected_structure = [
+            {"path": "PS1", "is_dir": True},
             {"path": "PS1/game1.bin"},
             {"path": "PS1/game2.bin"},
+            {"path": "PS1/images", "is_dir": True},
+            {"path": "PS1/images/game1.png"},
+            {"path": "PS1/images/game2.png"},
+            {"path": "PS1/multidisk", "is_dir": True},
             {"path": "PS1/multidisk/game3_disk1.bin"},
             {"path": "PS1/multidisk/game3_disk2.bin"},
             {
                 "path": "PS1/multidisk/game3.m3u",
                 "contents": "./multidisk/game3_disk1.bin\n./multidisk/game3_disk2.bin",
             },
-            {"path": "PS1/images/game1.png"},
-            {"path": "PS1/images/game2.png"},
             {
                 "path": "PS1/gameslist.xml",
                 "contents": "<game>\n  <path>game1.bin</path>\n  <image>../psx/images/game1.png</image>\n</game>",
             },
+            {"path": "snes", "is_dir": True},
             {"path": "snes/file1.snes"},
             {"path": "snes/file2.snes"},
-            {"path": "snes/nested_dir/image.png"},
             {"path": "snes/file.xml", "contents": "<xml>foo</xml>"},
+            {"path": "snes/nested_dir", "is_dir": True},
+            {"path": "snes/nested_dir/image.png"},
         ]
 
         self.run_copy_test(
-            self.BASIC_SOURCE_STRUCTURE,
-            self.EMPTY_DESTINATION,
-            expected_structure,
-            "--mapping snes:snes --mapping psx:PS1",
+            TestFixture(
+                source_struct=self.BASIC_SOURCE_STRUCTURE,
+                dest_struct=self.EMPTY_DESTINATION,
+                expected_struct=expected_structure,
+                options="--mapping snes:snes --mapping psx:PS1",
+            )
         )
 
     def test_copy_exclude(self):
@@ -341,20 +350,25 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         expected_destination_file_folder_struct = [
-            {"path": "snes/nested_dir/image.png"},
+            {"path": "snes", "is_dir": True},
             {"path": "snes/img.png"},
+            {"path": "snes/nested_dir", "is_dir": True},
+            {"path": "snes/nested_dir/image.png"},
         ]
 
         self.run_copy_test(
-            source_file_folder_struct,
-            destination_file_folder_struct,
-            expected_destination_file_folder_struct,
-            "--mapping snes:snes --copyInclude **/*.png --skipConfirm",
+            TestFixture(
+                source_struct=source_file_folder_struct,
+                dest_struct=destination_file_folder_struct,
+                expected_struct=expected_destination_file_folder_struct,
+                options="--mapping snes:snes --copyInclude **/*.png --skipConfirm",
+            )
         )
 
     def test_explode_dir(self):
         """Test that --explodeDir moves files from subdirectories to parent directory."""
         expected_structure = [
+            {"path": "PS1", "is_dir": True},
             {"path": "PS1/game1.bin"},
             {"path": "PS1/game2.bin"},
             {"path": "PS1/game3_disk1.bin"},
@@ -373,25 +387,30 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         self.run_copy_test(
-            self.BASIC_SOURCE_STRUCTURE,
-            self.EMPTY_DESTINATION,
-            expected_structure,
-            "--mapping psx:PS1 --explodeDir multidisk --explodeDir images --rewrite *.m3u:\./multidisk/:./ --rewrite *.xml:\.\./psx/images/:./ --rewritesAreRegex",
+            TestFixture(
+                source_struct=self.BASIC_SOURCE_STRUCTURE,
+                dest_struct=self.EMPTY_DESTINATION,
+                expected_struct=expected_structure,
+                options="--mapping psx:PS1 --explodeDir multidisk --explodeDir images --rewrite *.m3u:./multidisk/:./ --rewrite *.xml:../psx/images/:./ --rewritesAreRegex",
+            )
         )
 
     def test_rename_files(self):
         """Test that --rename flag works correctly for files."""
         expected_structure = [
+            {"path": "PS1", "is_dir": True},
             {"path": "PS1/game1.bin"},
             {"path": "PS1/game2.bin"},
+            {"path": "PS1/images", "is_dir": True},
+            {"path": "PS1/images/game1.png"},
+            {"path": "PS1/images/game2.png"},
+            {"path": "PS1/multidisk", "is_dir": True},
             {"path": "PS1/multidisk/game3_disk1.bin"},
             {"path": "PS1/multidisk/game3_disk2.bin"},
             {
                 "path": "PS1/multidisk/game3.m3u",
                 "contents": "./multidisk/game3_disk1.bin\n./multidisk/game3_disk2.bin",
             },
-            {"path": "PS1/images/game1.png"},
-            {"path": "PS1/images/game2.png"},
             {
                 "path": "PS1/miyoogamelist.xml",
                 "contents": "<game>\n  <path>game1.bin</path>\n  <image>../psx/images/game1.png</image>\n</game>",
@@ -400,10 +419,12 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         self.run_copy_test(
-            self.BASIC_SOURCE_STRUCTURE,
-            self.EMPTY_DESTINATION,
-            expected_structure,
-            "--mapping psx:PS1 --rename gameslist.xml:miyoogamelist.xml",
+            TestFixture(
+                source_struct=self.BASIC_SOURCE_STRUCTURE,
+                dest_struct=self.EMPTY_DESTINATION,
+                expected_struct=expected_structure,
+                options="--mapping psx:PS1 --rename gameslist.xml:miyoogamelist.xml",
+            )
         )
 
     def test_clean_target(self):
@@ -415,16 +436,19 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         expected_structure = [
+            {"path": "PS1", "is_dir": True},
             {"path": "PS1/game1.bin"},
             {"path": "PS1/game2.bin"},
+            {"path": "PS1/images", "is_dir": True},
+            {"path": "PS1/images/game1.png"},
+            {"path": "PS1/images/game2.png"},
+            {"path": "PS1/multidisk", "is_dir": True},
             {"path": "PS1/multidisk/game3_disk1.bin"},
             {"path": "PS1/multidisk/game3_disk2.bin"},
             {
                 "path": "PS1/multidisk/game3.m3u",
                 "contents": "./multidisk/game3_disk1.bin\n./multidisk/game3_disk2.bin",
             },
-            {"path": "PS1/images/game1.png"},
-            {"path": "PS1/images/game2.png"},
             {
                 "path": "PS1/gameslist.xml",
                 "contents": "<game>\n  <path>game1.bin</path>\n  <image>../psx/images/game1.png</image>\n</game>",
@@ -432,70 +456,67 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         self.run_copy_test(
-            self.BASIC_SOURCE_STRUCTURE,
-            destination_with_files,
-            expected_structure,
-            "--mapping psx:PS1 --cleanTarget",
+            TestFixture(
+                source_struct=self.BASIC_SOURCE_STRUCTURE,
+                dest_struct=destination_with_files,
+                expected_struct=expected_structure,
+                options="--mapping psx:PS1 --cleanTarget",
+            )
         )
 
-    def test_simple_file_rewrite(self):
-        """Test file content rewriting with simple patterns."""
+    def test_empty_directory_handling(self):
+        """Test that empty directories are properly created and preserved."""
         source_struct = [
-            {"path": "psx/playlist.txt", "contents": "OLDTEXT\nOLDTEXT"},
+            {"path": "snes/empty1", "is_dir": True},
+            {"path": "snes/empty2", "is_dir": True},
+            {"path": "snes/nonempty", "is_dir": True},
+            {"path": "snes/nonempty/file.txt", "contents": "test"},
+            {"path": "psx/empty3", "is_dir": True},
         ]
 
         destination_struct = [
+            {"path": "snes", "is_dir": True},
             {"path": "PS1", "is_dir": True},
+            {"path": "PS1/existing_empty", "is_dir": True},
         ]
 
         expected_struct = [
-            {"path": "PS1/playlist.txt", "contents": "NEWTEXT\nNEWTEXT"},
+            {"path": "snes", "is_dir": True},
+            {"path": "snes/empty1", "is_dir": True},
+            {"path": "snes/empty2", "is_dir": True},
+            {"path": "snes/nonempty", "is_dir": True},
+            {"path": "snes/nonempty/file.txt", "contents": "test"},
+            {"path": "PS1", "is_dir": True},
+            {"path": "PS1/empty3", "is_dir": True},
+            {"path": "PS1/existing_empty", "is_dir": True},
         ]
 
-        # Create initial file structures
-        self.create_files_folders(self.source_temp_folder, source_struct)
-        self.create_files_folders(self.destination_temp_folder, destination_struct)
-
-        # Run the copy engine and capture output for debugging
-        result = self.execute_rom_copy_engine(
-            self.source_temp_folder,
-            self.destination_temp_folder,
-            "--mapping psx:PS1 --rewrite *.txt:OLDTEXT:NEWTEXT",
-        )
-
-        if result.returncode != 0:
-            self.fail(
-                f"ROMCopyEngine failed with exit code {result.returncode}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-
-        # Get actual structure and compare
-        actual_destination_file_folder_struct = self.get_files_folders(
-            self.destination_temp_folder
-        )
-        self.assertStructuresEqual(
-            expected_struct, actual_destination_file_folder_struct
-        )
-
         self.run_copy_test(
-            self.BASIC_SOURCE_STRUCTURE,
-            destination_with_files,
-            expected_structure,
-            "--mapping psx:PS1 --cleanTarget",
+            TestFixture(
+                source_struct=source_struct,
+                dest_struct=destination_struct,
+                expected_struct=expected_struct,
+                options="--mapping snes:snes --mapping psx:PS1",
+            )
         )
 
     def test_copy_include(self):
         """Test that --copyInclude flag works correctly."""
         expected_structure = [
+            {"path": "PS1", "is_dir": True},
+            {"path": "PS1/images", "is_dir": True},
             {"path": "PS1/images/game1.png"},
             {"path": "PS1/images/game2.png"},
             {"path": "snes", "is_dir": True},
         ]
 
         self.run_copy_test(
-            self.BASIC_SOURCE_STRUCTURE,
-            self.EMPTY_DESTINATION,
-            expected_structure,
-            "--mapping psx:PS1 --copyInclude **/*.png",
+            TestFixture(
+                source_struct=self.BASIC_SOURCE_STRUCTURE,
+                dest_struct=self.EMPTY_DESTINATION,
+                expected_struct=expected_structure,
+                options="--mapping psx:PS1 --copyInclude **/*.png",
+            )
         )
 
     def test_file_rewrite(self):
@@ -516,23 +537,25 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         expected_struct = [
-            {"path": "PS1/playlist.m3u", "contents": "./game1.bin\n./game2.bin"},
+            {"path": "PS1", "is_dir": True},
             {
                 "path": "PS1/info.xml",
                 "contents": "<game>\n  <image>./game.png</image>\n</game>",
             },
+            {"path": "PS1/playlist.m3u", "contents": "./game1.bin\n./game2.bin"},
         ]
 
         self.run_copy_test(
-            source_struct,
-            destination_struct,
-            expected_struct,
-            "--mapping psx:PS1 --rewrite *.m3u:\./multidisk/:./ --rewrite *.xml:\.\./psx/images/:./ --rewritesAreRegex",
+            TestFixture(
+                source_struct=source_struct,
+                dest_struct=destination_struct,
+                expected_struct=expected_struct,
+                options="--mapping psx:PS1 --rewrite *.m3u:./multidisk/:./ --rewrite *.xml:../psx/images/:./ --rewritesAreRegex",
+            )
         )
 
     def test_simple_file_rewrite(self):
         """Test file content rewriting with simple patterns."""
-
         source_struct = [
             {"path": "psx/playlist.txt", "contents": "OLDTEXT\nOLDTEXT"},
         ]
@@ -542,14 +565,17 @@ class ROMCopyEngineTest(unittest.TestCase):
         ]
 
         expected_struct = [
+            {"path": "PS1", "is_dir": True},
             {"path": "PS1/playlist.txt", "contents": "NEWTEXT\nNEWTEXT"},
         ]
 
         self.run_copy_test(
-            source_struct,
-            destination_struct,
-            expected_struct,
-            "--mapping psx:PS1 --rewrite *.txt:OLDTEXT:NEWTEXT",
+            TestFixture(
+                source_struct=source_struct,
+                dest_struct=destination_struct,
+                expected_struct=expected_struct,
+                options="--mapping psx:PS1 --rewrite *.txt:OLDTEXT:NEWTEXT",
+            )
         )
 
 
