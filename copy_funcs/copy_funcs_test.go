@@ -81,9 +81,16 @@ func TestShouldInclude(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "nested path include",
+			name:     "nested path include with explicit subfolder",
 			path:     "folder/subfolder/test.txt",
 			include:  []string{"*/*.txt", "*/subfolder/*.txt"},
+			exclude:  []string{},
+			expected: true,
+		},
+		{
+			name:     "nested path include with doublestar glob",
+			path:     "folder/subfolder/test.txt",
+			include:  []string{"**/*.txt"},
 			exclude:  []string{},
 			expected: true,
 		},
