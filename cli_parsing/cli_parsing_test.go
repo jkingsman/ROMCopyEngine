@@ -133,7 +133,7 @@ func TestParseAndValidate(t *testing.T) {
 				"--sourceDir", tmpSource,
 				"--targetDir", tmpTarget,
 				"--mapping", "nes:NES",
-				"--rewrite", "*.xml:foo",  // Missing replace pattern
+				"--rewrite", "*.xml:foo", // Missing replace pattern
 			},
 			wantError: true,
 		},
@@ -154,7 +154,7 @@ func TestParseAndValidate(t *testing.T) {
 				"--sourceDir", tmpSource,
 				"--targetDir", tmpTarget,
 				"--mapping", "nes:NES",
-				"--rewrite", "*.xml:foo:bar:baz",  // Invalid format with too many colons
+				"--rewrite", "*.xml:foo:bar:baz", // Invalid format with too many colons
 				"--rewritesAreRegex",
 			},
 			wantError: true,
