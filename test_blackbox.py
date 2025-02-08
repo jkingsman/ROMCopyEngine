@@ -170,9 +170,8 @@ class ROMCopyEngineTest(unittest.TestCase):
             command.extend(options.split())
 
         job = subprocess.run(
-            ' '.join(command),
+            command,
             capture_output=True,
-            shell=True,
             text=True,
             cwd=os.path.dirname(os.path.abspath(__file__)),
         )
@@ -575,6 +574,97 @@ class ROMCopyEngineTest(unittest.TestCase):
                 dest_struct=destination_struct,
                 expected_struct=expected_struct,
                 options="--mapping psx:PS1 --rewrite *.txt:OLDTEXT:NEWTEXT",
+            )
+        )
+
+    def test_combined_include_exclude(self):
+        """Test that --copyInclude and --copyExclude flags work together correctly."""
+        source_struct = [
+            {"path": "snes/file1.snes"},
+            {"path": "snes/file2.snes"},
+            {"path": "snes/good.png"},
+            {"path": "snes/bad.png"},
+            {"path": "snes/nested_dir/good.png"},
+            {"path": "snes/nested_dir/bad.png"},
+            {"path": "snes/nested_dir/test.txt"},
+        ]
+
+        destination_struct = [
+            {"path": "snes", "is_dir": True},
+        ]
+
+        # Should only include PNGs that don't have 'bad' in the name
+        expected_struct = [
+            {"path": "snes", "is_dir": True},
+            {"path": "snes/good.png"},
+            {"path": "snes/nested_dir", "is_dir": True},
+            {"path": "snes/nested_dir/good.png"},
+        ]
+
+        self.run_copy_test(
+            TestFixture(
+                source_struct=source_struct,
+                dest_struct=destination_struct,
+                expected_struct=expected_struct,
+                options="--mapping snes:snes --copyInclude **/*.png --copyExclude **/bad*",
+            )
+        )
+
+    def test_dry_run(self):
+        """Test that --dryRun flag prevents any actual file operations."""
+        source_struct = [
+            {"path": "snes/file1.snes"},
+            {"path": "snes/file2.snes"},
+        ]
+
+        destination_struct = [
+            {"path": "snes", "is_dir": True},
+            {"path": "snes/existing.txt", "contents": "should remain"},
+        ]
+
+        # With --dryRun, destination should remain unchanged
+        expected_struct = [
+            {"path": "snes", "is_dir": True},
+            {"path": "snes/existing.txt", "contents": "should remain"},
+        ]
+
+        self.run_copy_test(
+            TestFixture(
+                source_struct=source_struct,
+                dest_struct=destination_struct,
+                expected_struct=expected_struct,
+                options="--mapping snes:snes --dryRun",
+            )
+        )
+
+    def test_multiple_renames(self):
+        """Test that multiple --rename operations work correctly together."""
+        source_struct = [
+            {"path": "snes/gameslist.xml", "contents": "<xml>test</xml>"},
+            {"path": "snes/images/game.png"},
+            {"path": "snes/saves/save.sav"},
+        ]
+
+        destination_struct = [
+            {"path": "snes", "is_dir": True},
+        ]
+
+        # Should rename both the XML file and the folders
+        expected_struct = [
+            {"path": "snes", "is_dir": True},
+            {"path": "snes/miyoogamelist.xml", "contents": "<xml>test</xml>"},
+            {"path": "snes/Imgs", "is_dir": True},
+            {"path": "snes/Imgs/game.png"},
+            {"path": "snes/SaveData", "is_dir": True},
+            {"path": "snes/SaveData/save.sav"},
+        ]
+
+        self.run_copy_test(
+            TestFixture(
+                source_struct=source_struct,
+                dest_struct=destination_struct,
+                expected_struct=expected_struct,
+                options="--mapping snes:snes --rename gameslist.xml:miyoogamelist.xml --rename images:Imgs --rename saves:SaveData",
             )
         )
 
