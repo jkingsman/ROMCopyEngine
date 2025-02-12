@@ -1,8 +1,8 @@
 # ROMCopyEngine
 
-*Your ROM collection is perfect and meticulously organized. But this device/OS wants boxart in a folder called `Imgs`. Another OS wants a `gameslist.xml` file, but another one wants `miyoogamelist.xml`. Another one calles `nes` by `fc` and `snes` by `supernes`. How can you get your ROMs loaded on this device with minimal headache?*
+*Your ROM collection is perfect and meticulously organized. But this device/OS wants boxart in a folder called `Imgs`. One OS wants a `gameslist.xml` file, but another one wants `miyoogamelist.xml`. Another one calls `nes` by `fc` and `snes` by `supernes`. How can you get your ROMs loaded, and consistently updated, on this device with minimal headache?*
 
-Use ROMCopyEngine.
+## Use ROMCopyEngine.
 
 ![Alt text](/screenshot.png?raw=true "ROMCopyEngine in action")
 
