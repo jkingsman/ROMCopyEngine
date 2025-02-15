@@ -26,7 +26,7 @@ func summarizeWarnConfirm(config *cli_parsing.Config) {
 		}
 
 		fmt.Println("[Hint: you can rerun this with '--dryRun' to see all operations that would be performed without performing them, or use '--skipConfirm' to skip this confirmation]")
-		if cli_parsing.GetConfirmation("Are you sure you want to proceed?") {
+		if cli_parsing.GetConfirmation("All files will be copied as summarized above. If file names conflict, they will be overwritten. Are you sure you want to proceed?") {
 			logging.Log(logging.Base, "", "Beginning copy...")
 		} else {
 			logging.Log(logging.Base, "", "Copy cancelled. No operations performed.")
@@ -208,10 +208,6 @@ func main() {
  / , _/ /_/ / /|_/ / /__/ _ \/ _ \/ // / _// _ \/ _ '/ / _ \/ -_)
 /_/|_|\____/_/  /_/\___/\___/ .__/\_, /___/_//_/\_, /_/_//_/\__/
                            /_/   /___/         /___/
-
-          ┌┐ ┬ ┬   ┬┌─┐┌─┐┬┌─  ┬┌─┬┌┐┌┌─┐┌─┐┌┬┐┌─┐┌┐┌
-          ├┴┐└┬┘   │├─┤│  ├┴┐  ├┴┐│││││ ┬└─┐│││├─┤│││
-          └─┘ ┴   └┘┴ ┴└─┘┴ ┴  ┴ ┴┴┘└┘└─┘└─┘┴ ┴┴ ┴┘└┘
 `
 	fmt.Println(intro)
 

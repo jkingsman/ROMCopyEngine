@@ -7,15 +7,15 @@
 ![Alt text](/screenshot.png?raw=true "ROMCopyEngine in action")
 
 
-## Installation
+# Installation
 
-### via Releases
+## via Releases
 
 Check out the newest release from [the releases page](https://github.com/jkingsman/ROMCopyEngine/releases) or glance at the right sidebar.
 
 Download the appropriate binary for your platform, unzip it, and use it! If you're on Linux, I've got binaries as well as a deb and an RPM.
 
-### via `go get`
+## via `go get`
 
 If you've got go, or [want to install it](https://go.dev/doc/install):
 
@@ -24,7 +24,7 @@ go install github.com/jkingsman/ROMCopyEngine@latest
 romcopyengine --help
 ```
 
-### from source
+## from source
 
 ```
 git clone https://github.com/jkingsman/ROMCopyEngine.git
@@ -34,7 +34,7 @@ go run romcopyengine.go
 
 ## Example usages
 
-Copy PS1 games from your `psx` directory to the device's `PS1` directory, but exclude `.chd` files
+### Example 1
 
 ```bash
 ./romcopyengine \
@@ -44,9 +44,11 @@ Copy PS1 games from your `psx` directory to the device's `PS1` directory, but ex
     --copyExclude "*.chd"
 ```
 
+Copy PS1 games from your `psx` directory to the device's `PS1` directory, but exclude `.chd` files
+
 **Note that globs are path-local to the platform folder! If you want to work on ALL `*chd` files regardless of hierarchy, you need to doublestar glob (e.g. `**/*.chd`)**
 
-Copy PS1 games, and for games in the folder called `multidisk`, move them to the same folder level as other games and update any `.m3u` files to reflect that.
+### Example 2
 
 ```bash
 romcopyengine \
@@ -57,20 +59,9 @@ romcopyengine \
     --rewrite "*.m3u:./multidisk:./"
 ```
 
-An incredibly full featured invocation:
+Copy PS1 games, and for games in the folder called `multidisk`, move them to the same folder level as other games and update any `.m3u` files to reflect that.
 
-* Copies from `/mnt/d/ROMs/` to `/mnt/i/`, copying the contents of:
-    * `/mnt/d/ROMs/psx` to `/mnt/i/PS1`
-    * `/mnt/d/ROMs/snes` to `/mnt/i/SFC`
-    * `/mnt/d/ROMs/nes` to `/mnt/i/FC`
-    * `/mnt/d/ROMs/gg` to `/mnt/i/GAMEGEAR`
-* Exclude any files ending in `.old` or `.backup`
-* Copy the contents of the folders `multidisk` and `images` in each of the console folders to the top of the console folder (e.g. `/mnt/i/PS1/images/file.jpg` moves to `/mnt/i/PS1/file.jpg`) and delete the now-empty folders
-* Rename `gameslist.xml` to `data.xml` and `all_games.txt` to `_all_games.txt`
-* Flag rewrite rules as regular expressions
-* Replace all instances of `./multidisk` with `./` in `.m3u` files (because disks moved during explosion)
-* Replace all instances of `../<anything>/images` (e.g. `../snes/images` or `../gg/images`) to `./` in `.xml` files (because images moved during explosion, and assuming something like Skraper has done directories a bit weird as it can tend to do)
-
+### Example 3
 
 ```bash
 romcopyengine \
@@ -91,10 +82,23 @@ romcopyengine \
     --rewrite "*.xml:\.\./.*?/images:./"
 ```
 
+An incredibly full featured invocation:
+
+* Copies from `/mnt/d/ROMs/` to `/mnt/i/`, copying the contents of:
+    * `/mnt/d/ROMs/psx` to `/mnt/i/PS1`
+    * `/mnt/d/ROMs/snes` to `/mnt/i/SFC`
+    * `/mnt/d/ROMs/nes` to `/mnt/i/FC`
+    * `/mnt/d/ROMs/gg` to `/mnt/i/GAMEGEAR`
+* Exclude any files ending in `.old` or `.backup`
+* Copy the contents of the folders `multidisk` and `images` in each of the console folders to the top of the console folder (e.g. `/mnt/i/PS1/images/file.jpg` moves to `/mnt/i/PS1/file.jpg`) and delete the now-empty folders
+* Rename `gameslist.xml` to `data.xml` and `all_games.txt` to `_all_games.txt`
+* Flag rewrite rules as regular expressions
+* Replace all instances of `./multidisk` with `./` in `.m3u` files (because disks moved during explosion)
+* Replace all instances of `../<anything>/images` (e.g. `../snes/images` or `../gg/images`) to `./` in `.xml` files (because images moved during explosion, and assuming something like Skraper has done directories a bit weird as it can tend to do)
+
 ## Command line option overview
 
 *This is basically availble via romcopyengine --help.*
-
 
 ### Source, destination, and their relationship
 
