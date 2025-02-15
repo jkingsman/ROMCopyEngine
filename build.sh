@@ -88,6 +88,8 @@ echo "SHA256 checksums are available in $CHECKSUM_FILE"
 
 # Only create and push tag if one was provided
 if [ -n "$TAG" ]; then
+    git tag -d "$TAG" || true
+    git push --delete origin "$TAG" || true
     git tag "$TAG"
     git push origin "$TAG"
 else
