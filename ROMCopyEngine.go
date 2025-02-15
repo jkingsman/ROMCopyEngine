@@ -201,14 +201,11 @@ func runPostCopyOperations(config *cli_parsing.Config, destPath string) error {
 }
 
 func main() {
-	intro := `
-
-   ___  ____  __  ________               ____          _
+	intro := `   ___  ____  __  ________               ____          _
   / _ \/ __ \/  |/  / ___/__  ___  __ __/ __/__  ___ _(_)__  ___
  / , _/ /_/ / /|_/ / /__/ _ \/ _ \/ // / _// _ \/ _ '/ / _ \/ -_)
 /_/|_|\____/_/  /_/\___/\___/ .__/\_, /___/_//_/\_, /_/_//_/\__/
-                           /_/   /___/         /___/
-`
+                           /_/   /___/         /___/`
 	fmt.Println(intro)
 
 	config, err := cli_parsing.ParseAndValidate()

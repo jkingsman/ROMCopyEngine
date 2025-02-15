@@ -25,6 +25,7 @@ type CLI struct {
 	SkipConfirm      bool     `help:"skip all confirmations and execute the copy process" optional:"" name:"skipConfirm"`
 	DryRun           bool     `help:"don't execute any file copies or operations; just print what would be done" optional:"" name:"dryRun"`
 	LoopbackCopy     bool     `help:"[EXPERIMENTAL/UNSAFE] when set, any files matched by --copyInclude will have the path and extension stripped, be globbified into '**/*<filename>*', and then serve as the --copyInclude for a repeated invocation. Intended to simplify copying off a device to set a --copyInclude for '**/*.sav' or similar, then also copy the ROMs correlated with those saves. Untested; use at your own risk." optional:"" name:"loopbackCopy"`
+	SkipSummary      bool     `help:"[EXPERIMENTAL/UNSAFE] do not display a summary of operations to be performed" optional:"" name:"skipSummary"`
 }
 
 type Config struct {
@@ -41,6 +42,7 @@ type Config struct {
 	SkipConfirm      bool
 	DryRun           bool
 	LoopbackCopy     bool
+	SkipSummary      bool
 }
 
 type DirMapping struct {
@@ -99,6 +101,7 @@ func ParseAndValidate() (*Config, error) {
 		SkipConfirm:      cli.SkipConfirm,
 		DryRun:           cli.DryRun,
 		LoopbackCopy:     cli.LoopbackCopy,
+		SkipSummary:      cli.SkipSummary,
 	}
 
 	// Validate source directory exists
@@ -169,6 +172,10 @@ func ParseAndValidate() (*Config, error) {
 }
 
 func PrintCLIOpts(config *Config) {
+	if config.SkipSummary {
+		return
+	}
+
 	fmt.Println()
 	fmt.Println("==== Configuration ====")
 	fmt.Println()

@@ -203,6 +203,8 @@ func SearchAndReplace(path string, glob string, searchTerm string, replaceTerm s
 		if err := os.WriteFile(file, newContent, 0644); err != nil {
 			return true, fmt.Errorf("failed to write to file %s: %w", file, err)
 		}
+
+		logging.Log(logging.Detail, logging.IconRewrite, "Rewrote %s", file)
 	}
 
 	return true, nil
