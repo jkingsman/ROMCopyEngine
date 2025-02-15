@@ -127,15 +127,10 @@ cat << EOF
 go run ROMCopyEngine.go \\
     --sourceDir $FOLDER_SRC \\
     --targetDir $FOLDER_DEST \\
-    --mapping psx:PLAYSTATION \\
-    --mapping gba:GAMEBOYADVANCE \\
-    --mapping atari2600:2600 \\
+    --mapping psx:PLAYSTATION --mapping gba:GAMEBOYADVANCE --mapping atari2600:2600\\
     --copyExclude '**/*_romhack*' \\
-    --explodeDir multidisk \\
-    --explodeDir images \\
+    --explodeDir multidisk --explodeDir images \\
     --rename gamelist.xml:data.xml \\
-    --rewritesAreRegex \\
-    --rewrite "*.m3u:\./multidisk:./" \\
-    --rewrite "*.xml:\.\./.*?/images:./" \\
+    --rewritesAreRegex --rewrite "*.m3u:\./multidisk:./" --rewrite "*.xml:\.\./.*?/images:./"\\
     --skipConfirm --skipSummary
 EOF
