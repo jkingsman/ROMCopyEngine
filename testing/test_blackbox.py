@@ -11,6 +11,8 @@ from dataclasses import dataclass
 import difflib
 
 
+PRINT_CREATION_AND_COMMAND = False
+
 @dataclass
 class FileStructure:
     path: str
@@ -26,6 +28,9 @@ class TestFixture:
     expected_struct: List[Dict[str, Any]]
     options: str = ""
 
+def print_debug(statement: str):
+    if PRINT_CREATION_AND_COMMAND:
+        print(statement)
 
 class ROMCopyEngineTest(unittest.TestCase):
     def setUp(self):
@@ -55,12 +60,16 @@ class ROMCopyEngineTest(unittest.TestCase):
             structure: List of dictionaries specifying files and folders to create
         """
         # First create all directories to ensure parent directories exist
+        print_debug("== BEGIN TEST STRUCTURE ==")
         for item in structure:
             full_path = os.path.join(base_path, item["path"])
             if item.get("is_dir", False):
                 os.makedirs(full_path, exist_ok=True)
+                print_debug(f"mkdir {full_path}")
             else:
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                print_debug(f"mkdir {os.path.dirname(full_path)}")
+
 
         # Then create all files
         for item in structure:
@@ -68,6 +77,8 @@ class ROMCopyEngineTest(unittest.TestCase):
             if not item.get("is_dir", False):
                 with open(full_path, "w") as f:
                     f.write(item.get("contents", ""))
+                    print_debug(f"echo '{item.get('contents', '')}' > {full_path}")
+        print_debug("== END TEST STRUCTURE ==")
 
     @staticmethod
     def get_files_folders(directory: str) -> List[Dict[str, Any]]:
@@ -169,11 +180,13 @@ class ROMCopyEngineTest(unittest.TestCase):
         if options:
             command.extend(options.split())
 
+        print_debug(f"Executing `{' '.join(command)}`")
+
         job = subprocess.run(
             command,
             capture_output=True,
             text=True,
-            cwd=os.path.dirname(os.path.abspath(__file__)),
+            cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."),
         )
 
         # print(' '.join(command))
@@ -190,6 +203,8 @@ class ROMCopyEngineTest(unittest.TestCase):
             fixture: TestFixture containing source, destination, expected structures and options
         """
         # Create initial file structures
+        print_debug(f"mkdir {self.source_temp_folder}")
+        print_debug(f"mkdir {self.destination_temp_folder}")
         self.create_files_folders(self.source_temp_folder, fixture.source_struct)
         self.create_files_folders(self.destination_temp_folder, fixture.dest_struct)
 
