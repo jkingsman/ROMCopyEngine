@@ -13,7 +13,7 @@
 
 Check out the newest release from [the releases page](https://github.com/jkingsman/ROMCopyEngine/releases) or glance at the right sidebar.
 
-Download the appropriate binary for your platform, unzip it, and use it! If you're on Linux, I've got binaries as well as a deb and an RPM.
+Download the appropriate binary for your platform, unzip it, and use it!
 
 ## via `go get`
 
