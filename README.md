@@ -159,6 +159,6 @@ The tests here are absolute GARBAGE. Terrible composition, and I didn't write mo
 
 Please format your code and ensure tests pass.
 
-Before PRing, run `gofmt -w **/*.go`. Test changes with `go test -v ./... && python3 testing/test_blackbox.py`.
+Before PRing, run `gofmt -w **/*.go`. Test changes with `go test -v ./... && python3 testing/test_blackbox.py && echo "All tests pass!"`.
 
 I will release builds (please don't PR artifacts), but you can test your artifacts by running `./build.sh` without a suffix (otherwise it tries to push that tag).
